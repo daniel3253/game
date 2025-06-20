@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Mobile Maze Game</title>
+  <style>
+    /* Reset and basics */
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      margin: 0;
+      background: #1e1e2f;
+      color: #eee;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    header {
+      padding: 15px 20px;
+      text-align: center;
+      background: #2c2c44;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      font-weight: 700;
+      font-size: 1.3rem;
+      user-select: none;
+    }
+
+    #info {
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 15px;
+      background: #2c2c44;
+      font-size: 1rem;
+      user-select: none;
+    }
+    #info > div {
+      text-align: center;
+      min-width: 70px;
+    }
+
+    #maze {
+  flex: 1 1 auto;
+  max-height: calc(100vh - 300px); /* leave space for header, info, and controls */
+  overflow: auto;
+
+      display: grid;
+      justify-content: center;
+      background: #282843;
+      padding: 10px;
+      overflow: auto;
+      border-top: 4px solid #3498db;
+      border-bottom: 4px solid #3498db;
+    }
+
+    .cell {
+      box-sizing: border-box;
+      border-radius: 5px;
+      user-select: none;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+      transition: background-color 0.3s ease;
+    }
+    .wall {
+      background: #0f1222;
+      box-shadow: inset 0 0 5px #000a;
+    }
+    .path {
+      background: #3a3a66;
+      box-shadow: inset 0 0 3px #001;
+    }
+    .exit {
+      background: #1abc9c;
+      color: #004d40;
+      font-size: 1.7rem;
+      box-shadow: 0 0 10px #1abc9caa;
+    }
+    .mouse {
+      color: #ffeb3b;
+      font-size: 1.6rem;
+      text-shadow: 0 0 8px #ffeb3bcc;
+    }
+    .shake {
+      animation: shake 0.4s ease;
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    #message {
+      text-align: center;
+      min-height: 1.5em;
+      padding: 8px 10px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: #f1c40f;
+      user-select: none;
+    }
+
+    /* Mobile controls */
+    #mobile-controls {
+      background: #222945;
+      padding: 10px 0 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+      box-shadow: inset 0 1px 0 #3b3f61;
+    }
+    #mobile-controls > button {
+      background: #3498db;
+      border: none;
+      border-radius: 50%;
+      color: white;
+      font-size: 2.3rem;
+      padding: 0;
+      margin: 8px;
+      width: 70px;
+      height: 70px;
+      box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+      transition: background-color 0.25s ease;
+      touch-action: manipulation;
+    }
+    #mobile-controls > button:active {
+      background: #2980b9;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.5);
+    }
+    #mobile-controls .horizontal {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      max-width: 260px;
+    }
+    #mobile-controls .horizontal > button {
+      margin: 0 12px;
+      width: 60px;
+      height: 60px;
+      font-size: 2rem;
+    }
+
+    /* Responsive scaling for maze cells */
+    #maze {
+      grid-template-columns: repeat(auto-fit, minmax(30px, 1fr));
+      grid-auto-rows: 30px;
+      gap: 4px;
+    }
+    .cell {
+      font-size: 1.2rem;
+    }
+
+  </style>
+</head>
+<body>
+  <header>Mobile Maze Game</header>
+
+  <div id="info">
+    <div>Level: <span id="level-num">1</span></div>
+    <div>Time: <span id="time">0</span>s</div>
+    <div>Best: <span id="best-time">--</span>s</div>
+  </div>
+
+  <div id="maze" role="grid" aria-label="Maze grid"></div>
+  <div id="message" aria-live="polite"></div>
+
+  <div id="mobile-controls" role="group" aria-label="Movement controls">
+    <button id="btn-up" aria-label="Move Up">⬆️</button>
+    <div class="horizontal">
+      <button id="btn-left" aria-label="Move Left">⬅️</button>
+      <button id="btn-down" aria-label="Move Down">⬇️</button>
+      <button id="btn-right" aria-label="Move Right">➡️</button>
+    </div>
+  </div>
+
+  <script>
+    // Elements
+    const mazeElem = document.getElementById('maze');
+    const messageElem = document.getElementById('message');
+    const timeElem = document.getElementById('time');
+    const bestTimeElem = document.getElementById('best-time');
+    const levelNumElem = document.getElementById('level-num');
+
+    let maze;
+    let mousePos = { x: 1, y: 1 };
+    let startTime = null;
+    let timerInterval = null;
+    let bestTime = null;
+    let level = 1;
+
+    function generateMaze(width, height) {
+      const maze = Array(height).fill().map(() => Array(width).fill(1));
+      const directions = [[0, -2], [2, 0], [0, 2], [-2, 0]];
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+
+      function carve(x, y) {
+        maze[y][x] = 0;
+        for (const [dx, dy] of shuffle(directions)) {
+          const nx = x + dx, ny = y + dy;
+          if (nx > 0 && nx < width - 1 && ny > 0 && ny < height - 1 && maze[ny][nx] === 1) {
+            maze[y + dy / 2][x + dx / 2] = 0;
+            carve(nx, ny);
+          }
+        }
+      }
+
+      carve(1, 1);
+
+      // BFS for exit
+      let queue = [{ x: 1, y: 1, dist: 0 }];
+      let visited = Array(height).fill().map(() => Array(width).fill(false));
+      visited[1][1] = true;
+      let farthest = { x: 1, y: 1, dist: 0 };
+
+      const bfsDirs = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+      while (queue.length) {
+        const { x, y, dist } = queue.shift();
+        if (dist > farthest.dist) farthest = { x, y, dist };
+        for (const [dx, dy] of bfsDirs) {
+          const nx = x + dx, ny = y + dy;
+          if (maze[ny] && maze[ny][nx] === 0 && !visited[ny][nx]) {
+            visited[ny][nx] = true;
+            queue.push({ x: nx, y: ny, dist: dist + 1 });
+          }
+        }
+      }
+
+      maze[farthest.y][farthest.x] = 2;
+      return maze;
+    }
+
+    function renderMaze() {
+      mazeElem.innerHTML = '';
+      // Grid template columns based on maze width
+      mazeElem.style.gridTemplateColumns = `repeat(${maze[0].length}, minmax(0, 1fr))`;
+
+      for (let y = 0; y < maze.length; y++) {
+        for (let x = 0; x < maze[0].length; x++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+
+          if (maze[y][x] === 1) cell.classList.add('wall');
+          else if (maze[y][x] === 0) cell.classList.add('path');
+          else if (maze[y][x] === 2) {
+            cell.classList.add('exit');
+            cell.textContent = '🏁';
+          }
+
+          if (x === mousePos.x && y === mousePos.y) {
+            cell.textContent = '🐭';
+            cell.classList.add('mouse');
+          }
+
+          mazeElem.appendChild(cell);
+        }
+      }
+    }
+
+    function startTimer() {
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        timeElem.textContent = elapsed;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    function resetMouse() {
+      mousePos = { x: 1, y: 1 };
+      renderMaze();
+    }
+
+    function shakeMouse() {
+      const idx = mousePos.y * maze[0].length + mousePos.x;
+      const mouseCell = mazeElem.children[idx];
+      mouseCell.classList.add('shake');
+      setTimeout(() => {
+        mouseCell.classList.remove('shake');
+        resetMouse();
+      }, 400);
+    }
+
+    function moveMouse(dx, dy) {
+      const newX = mousePos.x + dx;
+      const newY = mousePos.y + dy;
+
+      if (
+        newY < 0 || newY >= maze.length ||
+        newX < 0 || newX >= maze[0].length
+      ) return;
+
+      if (maze[newY][newX] === 1) {
+        shakeMouse();
+        messageElem.textContent = "Ouch! Wall!";
+        return;
+      }
+
+      if (!startTime) startTimer();
+      messageElem.textContent = "";
+
+      mousePos.x = newX;
+      mousePos.y = newY;
+      renderMaze();
+
+      if (maze[newY][newX] === 2) {
+        stopTimer();
+        const timeTaken = Math.floor((Date.now() - startTime) / 1000);
+        messageElem.textContent = `🎉 Level ${level} complete in ${timeTaken}s!`;
+
+        if (bestTime === null || timeTaken < bestTime) {
+          bestTime = timeTaken;
+          bestTimeElem.textContent = bestTime;
+        }
+
+        window.removeEventListener('keydown', handleKeyDown);
+
+        setTimeout(() => {
+          level++;
+          levelNumElem.textContent = level;
+          startNewMaze();
+        }, 1500);
+      }
+    }
+
+    // Prevent arrow keys scroll + keyboard control
+    function handleKeyDown(e) {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        switch (e.key) {
+          case 'ArrowUp': moveMouse(0, -1); break;
+          case 'ArrowDown': moveMouse(0, 1); break;
+          case 'ArrowLeft': moveMouse(-1, 0); break;
+          case 'ArrowRight': moveMouse(1, 0); break;
+        }
+      }
+    }
+
+    function startNewMaze() {
+      stopTimer();
+      timeElem.textContent = "0";
+      messageElem.textContent = "";
+      startTime = null;
+      mousePos = { x: 1, y: 1 };
+
+      const size = 10; // fixed maze size (level 5)
+      maze = generateMaze(size, size);
+
+      renderMaze();
+      updateBestTimeDisplay();
+      window.addEventListener('keydown', handleKeyDown, { passive: false });
+    }
+
+    function updateBestTimeDisplay() {
+      bestTimeElem.textContent = bestTime !== null ? bestTime : "--";
+    }
+
+    // Mobile controls event listeners
+    document.getElementById('btn-up').addEventListener('click', () => moveMouse(0, -1));
+    document.getElementById('btn-down').addEventListener('click', () => moveMouse(0, 1));
+    document.getElementById('btn-left').addEventListener('click', () => moveMouse(-1, 0));
+    document.getElementById('btn-right').addEventListener('click', () => moveMouse(1, 0));
+
+    // Initialize game
+    startNewMaze();
+    levelNumElem.textContent = level;
+  </script>
+</body>
+</html>
